@@ -1,6 +1,7 @@
 # fishkit
 
-一台新机器上，把 **fish 配置 + 两个终端包管理工具** 一次装好的小仓库。
+从一台只有 bash 的机器开始，把 **fish、提示符皮肤、两个包管理工具** 一次装好。
+缺 `fish` / `python3` / `fzf` / `curl` / `starship` 都会自己补，登录 shell 也一并改成 fish。
 
 ```bash
 bash install.sh          # 系统安装（会要 sudo），装完 exec fish 就完事
@@ -47,21 +48,36 @@ fishkit/
 ## 安装
 
 ```bash
-bash install.sh                 # 系统安装（sudo 自动提权）
+bash install.sh                 # 一条命令搞定：装 fish + 依赖 + 提示符 + 工具
 bash install.sh --user          # 只装当前用户
-bash install.sh --starship      # 没有 starship 时下载安装（系统模式装到 /usr/local/bin）
-bash install.sh --theme montys  # 强制用自带主题（系统模式不支持，会退回 starship）
+bash install.sh --no-starship   # 不联网下 starship，用系统级 montys
+bash install.sh --no-deps       # 不自动 apt 装东西
+bash install.sh --no-shell      # 不改登录 shell
 bash install.sh --dry-run       # 只打印要做什么，不提权、不写文件
 bash install.sh --test          # 装完跑自测
 bash install.sh --uninstall     # 卸载（系统模式同样要 sudo）
 ```
+
+它会把一路缺的东西补齐：
+
+| 缺什么 | 默认动作 |
+| --- | --- |
+| `python3` | `apt-get install -y python3`（必需，装不上就停） |
+| `fish` | `apt-get install -y fish`，然后 `chsh -s $(command -v fish) $SUDO_USER`（写进 `/etc/shells`，重新登录生效） |
+| `fzf` | `apt-get install -y fzf`（`pkg se` / `pkg rm` 用） |
+| `curl` | `apt-get install -y curl`（下载 starship 用） |
+| `starship` | 有现成的就复制到 `/usr/local/bin`，没有就用官方脚本装；失败则退回 montys |
+| 皮肤 | starship.toml 装到 `/usr/local/share/fishkit/`；montys 备用 |
 
 | 选项 | 说明 |
 | --- | --- |
 | `-y, --yes` | 不询问 |
 | `--system` / `--user` | 安装模式，默认 `system` |
 | `--theme auto\|starship\|montys\|none` | 提示符方案，默认 `auto` |
-| `--starship` | 没装 starship 时下载安装 |
+| `--no-deps` | 不自动 apt 装依赖 |
+| `--no-shell` | 不改登录 shell |
+| `--no-starship` | 不下载 starship（用 montys） |
+| `--starship` | 兼容旧参数（现在默认就会装） |
 | `--no-proxy` | 不装 `proxy.fish`（仅 `--user`） |
 | `--no-config` | 不碰 `config.fish`（仅 `--user`） |
 | `--links` | 在 `~/.local/bin` 建软链（仅 `--user`） |
@@ -74,7 +90,7 @@ bash install.sh --uninstall     # 卸载（系统模式同样要 sudo）
 ```
 /usr/local/lib/fishkit/bin/{pkgview,aptui}.py     # 工具本体
 /usr/local/bin/{pkgview,aptui}                    # 软链，任何 shell 都能直接敲
-/usr/local/bin/starship                           # 从 ~/.local/bin 搬过去的那份
+/usr/local/bin/starship                           # 没有就用官方脚本装
 /usr/local/share/fishkit/starship.toml            # 所有用户共用的提示符配置
 /usr/share/fish/vendor_functions.d/               # pkg / pkgview / aptui / __fishkit_dir / fish_mode_prompt
 /usr/share/fish/vendor_completions.d/pkg.fish     # Tab 补全

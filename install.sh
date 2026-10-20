@@ -39,7 +39,9 @@ MARK_END="# <<< fishkit <<<"
 
 MODE="system"          # system | user
 THEME="auto"           # auto | starship | montys | none
-INSTALL_STARSHIP=0
+DO_DEPS=1              # 缺什么 apt 装什么（fish/python3/fzf/curl）
+DO_SHELL=1             # 把 fish 设成登录 shell
+DO_STARSHIP=1          # 没有 starship 就下载
 DO_PROXY=1
 DO_CONFIG=1
 DO_LINKS=0
@@ -76,7 +78,10 @@ fishkit $VERSION —— fish 配置 + pkgview / aptui
       --user             只装当前用户（~/.config/fish，依赖本仓库目录）
       --system           强制系统安装（默认）
       --theme <名>       提示符: auto（默认）/ starship / montys / none
-      --starship         没有 starship 时下载安装（系统安装装到 /usr/local/bin）
+      --no-deps          不自动 apt 装 fish/python3/fzf/curl
+      --no-shell         不改登录 shell
+      --no-starship      不下载 starship，直接用 montys
+      --starship         兼容旧参数（现在默认就会装）
       --no-proxy         不装 proxy-on / proxy-off（仅 --user）
       --no-config        不碰 config.fish（仅 --user）
       --links            额外在 ~/.local/bin 建软链（仅 --user）
@@ -224,7 +229,10 @@ while [ $# -gt 0 ]; do
         --system)      MODE="system" ;;
         --theme)       shift; [ $# -gt 0 ] || die "--theme 需要一个值"; THEME=$1 ;;
         --theme=*)     THEME=${1#*=} ;;
-        --starship)    INSTALL_STARSHIP=1 ;;
+        --starship)    DO_STARSHIP=1 ;;
+        --no-starship) DO_STARSHIP=0 ;;
+        --no-deps)     DO_DEPS=0 ;;
+        --no-shell)    DO_SHELL=0 ;;
         --no-proxy)    DO_PROXY=0 ;;
         --no-config)   DO_CONFIG=0 ;;
         --links)       DO_LINKS=1 ;;
@@ -242,12 +250,42 @@ case "$THEME" in
     *) die "--theme 只能是 auto / starship / montys / none" ;;
 esac
 
-# ------------------------------------------------------------------- 前置检查 --
-command -v python3 >/dev/null 2>&1 \
-    || die "需要 python3：sudo apt-get install -y python3"
+# -------------------------------------------------------------------- 依赖 --
+apt_install() {
+    local pkg=$1
+    command -v apt-get >/dev/null 2>&1 || return 1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$pkg" >/dev/null 2>&1 && return 0
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$pkg" >/dev/null 2>&1
+}
 
-HAVE_FISH=0
-command -v fish >/dev/null 2>&1 && HAVE_FISH=1
+# 只有「真·系统安装 + root + 非 dry-run」才允许装包
+CAN_BOOTSTRAP=0
+if [ "$DRY" = 0 ] && [ "$(id -u)" -eq 0 ] && [ "$SYS_PREFIX" = "/usr/local" ]; then
+    CAN_BOOTSTRAP=1
+fi
+
+ensure_cmd() {   # ensure_cmd <命令> <apt 包> [必需=0]
+    local cmd=$1 pkg=$2 need=${3:-0}
+    command -v "$cmd" >/dev/null 2>&1 && return 0
+    if [ "$DRY" = 1 ]; then
+        dim "[dry] 缺 $cmd，会 apt-get install -y $pkg"
+        return 0
+    fi
+    if [ "$DO_DEPS" = 0 ] || [ "$CAN_BOOTSTRAP" = 0 ]; then
+        if [ "$need" = 1 ]; then die "缺 $cmd，先装：sudo apt-get install -y $pkg"; fi
+        warn "缺 $cmd（没自动装）"
+        return 0
+    fi
+    log "安装依赖 $pkg …"
+    if apt_install "$pkg"; then
+        ok "$cmd 已就绪"
+    else
+        if [ "$need" = 1 ]; then die "装不上 $pkg：sudo apt-get install -y $pkg"; fi
+        warn "装不上 $pkg，相关功能会缺"
+    fi
+    return 0
+}
 
 # 系统模式：没 root 就自己提权（dry-run 不提权）
 if [ "$MODE" = system ] && [ "$SYS_PREFIX" = "/usr/local" ]; then
@@ -271,29 +309,69 @@ if [ "$MODE" = system ] && [ "$(id -u)" -eq 0 ] && [ -n "${SUDO_USER:-}" ]; then
 fi
 BACKUP_DIR="$FISH_CFG/fishkit-backup/$STAMP"
 
+# 把 fish 也一起装好、设成登录 shell
+if [ "$MODE" = system ]; then
+    title "系统依赖"
+    ensure_cmd python3 python3 1
+    ensure_cmd fish fish 0
+    ensure_cmd fzf fzf 0
+    ensure_cmd curl curl 0
+else
+    command -v python3 >/dev/null 2>&1 \
+        || die "需要 python3：sudo apt-get install -y python3"
+fi
+
+HAVE_FISH=0
+command -v fish >/dev/null 2>&1 && HAVE_FISH=1
+
+if [ "$MODE" = system ] && [ "$DO_SHELL" = 1 ] && [ "$HAVE_FISH" = 1 ]; then
+    if [ "$CAN_BOOTSTRAP" = 1 ]; then
+        target_user=${SUDO_USER:-root}
+        fish_path=$(command -v fish)
+        grep -qxF "$fish_path" /etc/shells 2>/dev/null || echo "$fish_path" >> /etc/shells
+        cur_shell=$(getent passwd "$target_user" 2>/dev/null | cut -d: -f7)
+        if [ "$cur_shell" != "$fish_path" ]; then
+            if chsh -s "$fish_path" "$target_user" >/dev/null 2>&1; then
+                ok "登录 shell: ${cur_shell:-?} → $fish_path（重新登录生效）"
+            else
+                warn "chsh 失败，手动改：chsh -s $fish_path"
+            fi
+        else
+            dim "登录 shell 已经是 $fish_path"
+        fi
+    else
+        dim "dry-run / 非系统前缀：跳过改登录 shell"
+    fi
+fi
+
 # ------------------------------------------------------------------ 主题决策 --
-# auto：装了 starship 就用它，否则退回 montys
+# auto：能装 starship 就用它，否则退回 montys
 has_starship() {
     command -v starship >/dev/null 2>&1 && return 0
-    [ -x "$SYS_PREFIX/bin/starship" ] && return 0
+    [ -f "$SYS_PREFIX/bin/starship" ] && return 0
     [ -x "$HOME/.local/bin/starship" ] && return 0
     return 1
 }
+THEME_REQ=$THEME      # 用户原始选择，日志里用
 if [ "$THEME" = auto ]; then
-    if has_starship || [ "$INSTALL_STARSHIP" = 1 ]; then THEME=starship; else THEME=montys; fi
+    if has_starship || [ "$DO_STARSHIP" = 1 ]; then THEME=starship; else THEME=montys; fi
 fi
 if [ "$THEME" = none ]; then PROMPT_VAL=""; else PROMPT_VAL=$THEME; fi
-# 系统安装不做 montys 的 omf 软链（那是 per-user 的），退回 starship 更省事
-if [ "$MODE" = system ] && [ "$THEME" = montys ]; then
-    dim "系统安装不支持 montys（它依赖用户的 omf 主题目录），改用 starship"
-    THEME=starship; PROMPT_VAL=starship
-fi
 
 title "fishkit $VERSION"
 log "仓库      $SRC"
 if [ "$MODE" = system ]; then
     log "模式      系统安装（$SYS_PREFIX + $FISH_DATA）"
-    log "提示符    $THEME（$SYS_SHARE/starship.toml）"
+    case "$THEME_REQ" in
+        none)   log "提示符    不接管" ;;
+        montys) log "提示符    montys（系统级 fish_prompt）" ;;
+        *)
+            if [ "$DO_STARSHIP" = 1 ]; then
+                log "提示符    starship（装不上会退回 montys）"
+            else
+                log "提示符    montys（--no-starship）"
+            fi ;;
+    esac
 else
     log "模式      用户安装（$FISH_CFG）"
     log "提示符    $THEME"
@@ -386,8 +464,8 @@ if [ "$MODE" = system ]; then
     install_sys_file "$SRC/fish/themes/montys/fish_prompt.fish" \
                      "$SYS_SHARE/themes/montys/fish_prompt.fish"
 
-    # starship 二进制：优先搬现成的，其次 --starship 下载
-    if [ ! -x "$SYS_PREFIX/bin/starship" ]; then
+    # starship 二进制：优先搬现成的，没有就下载（--no-starship 可关）
+    if [ ! -f "$SYS_PREFIX/bin/starship" ]; then
         srcbin=""
         for c in "$HOME/.local/bin/starship" /usr/bin/starship; do
             [ -f "$c" ] && { srcbin=$c; break; }
@@ -398,21 +476,37 @@ if [ "$MODE" = system ]; then
                 dim "$SYS_PREFIX/bin/starship 没变化"
             else cp -f "$srcbin" "$SYS_PREFIX/bin/starship"; chmod 755 "$SYS_PREFIX/bin/starship"
                  ok "starship ← $srcbin"; fi
-        elif [ "$INSTALL_STARSHIP" = 1 ]; then
-            command -v curl >/dev/null 2>&1 || die "需要 curl：sudo apt-get install -y curl"
-            if [ "$DRY" = 1 ]; then dim "[dry] 下载 starship → $SYS_PREFIX/bin"
+        elif [ "$DO_STARSHIP" = 1 ]; then
+            if [ "$DRY" = 1 ]; then
+                dim "[dry] 下载 starship → $SYS_PREFIX/bin"
+            elif command -v curl >/dev/null 2>&1; then
+                if curl -fsSL https://starship.rs/install.sh \
+                        | sh -s -- -y --bin-dir "$SYS_PREFIX/bin" >/dev/null 2>&1; then
+                    chmod 755 "$SYS_PREFIX/bin/starship"
+                    ok "starship → $SYS_PREFIX/bin/starship"
+                else
+                    warn "starship 下载失败（网络？），先用 montys 顶上"
+                fi
             else
-                curl -sS https://starship.rs/install.sh \
-                    | sh -s -- -y --bin-dir "$SYS_PREFIX/bin" \
-                    || die "starship 装不上（网络？）"
-                ok "starship → $SYS_PREFIX/bin/starship"
+                warn "没有 curl，跳过 starship 下载"
             fi
-        else
-            warn "没有 starship 二进制，提示符会退回 fish 默认样式"
-            dim "补装：bash $SRC/install.sh --starship"
         fi
     else
         dim "$SYS_PREFIX/bin/starship 已存在"
+    fi
+
+    # 最终决定用哪套提示符
+    if [ "$THEME" = none ]; then
+        PROMPT_VAL=""
+        dim "提示符：不接管"
+    elif [ -f "$SYS_PREFIX/bin/starship" ] && [ "$THEME" != montys ]; then
+        PROMPT_VAL=starship
+        ok "提示符：starship"
+    else
+        PROMPT_VAL=montys
+        install_sys_file "$SRC/fish/themes/montys/fish_prompt.fish" \
+                         "$FISH_DATA/vendor_functions.d/fish_prompt.fish"
+        ok "提示符：montys（系统级 fish_prompt）"
     fi
 
     # 所有用户共用的环境变量 + 提示符初始化
