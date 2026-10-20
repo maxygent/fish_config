@@ -78,7 +78,7 @@ bash install.sh --uninstall     # 卸载（系统模式同样要 sudo）
 | `--no-shell` | 不改登录 shell |
 | `--no-starship` | 不下载 starship（用 montys） |
 | `--starship` | 兼容旧参数（现在默认就会装） |
-| `--no-proxy` | 不装 `proxy.fish`（仅 `--user`） |
+| `--no-proxy` | 不装 `proxy.fish` |
 | `--no-config` | 不碰 `config.fish`（仅 `--user`） |
 | `--links` | 在 `~/.local/bin` 建软链（仅 `--user`） |
 | `-n, --dry-run` | 不写任何文件 |
@@ -95,6 +95,7 @@ bash install.sh --uninstall     # 卸载（系统模式同样要 sudo）
 /usr/share/fish/vendor_functions.d/               # pkg / pkgview / aptui / __fishkit_dir / fish_mode_prompt
 /usr/share/fish/vendor_completions.d/pkg.fish     # Tab 补全
 /usr/share/fish/vendor_conf.d/fishkit.fish        # FISHKIT_DIR / FISHKIT_PROMPT / STARSHIP_CONFIG
+/usr/share/fish/vendor_conf.d/proxy.fish          # proxy-on / proxy-off / proxy-status
 ```
 
 行为约定：
@@ -202,7 +203,8 @@ python3 bin/aptui.py --show nginx         # 单包详情（fzf 预览就是它�
 
 ## proxy.fish
 
-WSL 里走 Windows 宿主代理：
+`proxy-on` 两种安装模式都会装（系统模式在 `vendor_conf.d/`，用户模式在 `conf.d/`），
+Win 宿主 / 局域网代理都能用：
 
 ```fish
 proxy-on            # 自动探测（默认只认 10808）

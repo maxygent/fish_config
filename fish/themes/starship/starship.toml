@@ -23,6 +23,13 @@ $python$nodejs$rust$c
 
 add_newline = true
 
+# 目录扫描超时（毫秒）。默认 30ms，在「文件特别多」或「网络盘 / WSL 的 /mnt/c」上
+# 会报 "Scanning current directory timed out"。调到 100 通常够用；
+# 再不行说明那个目录本身就不适合放提示符里扫（比如 node_modules、挂载盘）。
+scan_timeout = 100
+# 自定义命令（代理端口）的超时，默认 500ms
+command_timeout = 800
+
 [character]
 success_symbol = "[󰍟](fg:magenta)"
 error_symbol = "[󰍟](fg:red)"

@@ -82,7 +82,7 @@ fishkit $VERSION —— fish 配置 + pkgview / aptui
       --no-shell         不改登录 shell
       --no-starship      不下载 starship，直接用 montys
       --starship         兼容旧参数（现在默认就会装）
-      --no-proxy         不装 proxy-on / proxy-off（仅 --user）
+      --no-proxy         不装 proxy-on / proxy-off
       --no-config        不碰 config.fish（仅 --user）
       --links            额外在 ~/.local/bin 建软链（仅 --user）
   -n, --dry-run          只打印将要做什么，不写任何文件
@@ -95,6 +95,7 @@ fishkit $VERSION —— fish 配置 + pkgview / aptui
   函数     $FISH_DATA/vendor_functions.d/
   补全     $FISH_DATA/vendor_completions.d/pkg.fish
   环境     $FISH_DATA/vendor_conf.d/fishkit.fish
+  代理     $FISH_DATA/vendor_conf.d/proxy.fish
   提示符   $SYS_SHARE/starship.toml（所有用户共用）
   备份     $SYS_BACKUP
 
@@ -387,7 +388,8 @@ if [ "$UNINSTALL" = 1 ]; then
     if [ "$MODE" = system ]; then
         for f in "$FISH_DATA"/vendor_functions.d/{pkg,pkgview,aptui,__fishkit_dir,fish_mode_prompt}.fish \
                  "$FISH_DATA"/vendor_completions.d/pkg.fish \
-                 "$FISH_DATA"/vendor_conf.d/fishkit.fish; do
+                 "$FISH_DATA"/vendor_conf.d/fishkit.fish \
+                 "$FISH_DATA"/vendor_conf.d/proxy.fish; do
             [ -e "$f" ] || continue
             if [ "$DRY" = 1 ]; then dim "[dry] 删除 $f"
             else rm -f "$f"; ok "删除 $f"; fi
@@ -457,6 +459,13 @@ if [ "$MODE" = system ]; then
     done
     install_sys_file "$SRC/fish/completions/pkg.fish" \
                      "$FISH_DATA/vendor_completions.d/pkg.fish"
+
+    if [ "$DO_PROXY" = 1 ]; then
+        install_sys_file "$SRC/fish/conf.d/proxy.fish" \
+                         "$FISH_DATA/vendor_conf.d/proxy.fish"
+    else
+        dim "跳过 proxy-on / proxy-off（--no-proxy）"
+    fi
 
     title "提示符素材 → $SYS_SHARE"
     install_sys_file "$SRC/fish/themes/starship/starship.toml" \
@@ -585,6 +594,9 @@ if [ "$MODE" = system ]; then
             done
             fish -n "$FISH_DATA/vendor_completions.d/pkg.fish" || die "语法错误: pkg.fish（补全）"
             fish -n "$FISH_DATA/vendor_conf.d/fishkit.fish" || die "语法错误: vendor_conf"
+            if [ -f "$FISH_DATA/vendor_conf.d/proxy.fish" ]; then
+                fish -n "$FISH_DATA/vendor_conf.d/proxy.fish" || die "语法错误: proxy.fish"
+            fi
             ok "fish -n 语法检查通过"
         fi
         [ -x "$SYS_PREFIX/bin/pkgview" ] && ok "pkgview 可直接执行"
