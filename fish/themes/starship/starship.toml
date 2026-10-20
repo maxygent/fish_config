@@ -1,0 +1,125 @@
+# =============================================================================
+# starship 提示符 —— 外观参照 gitee.com/lingzore/NyxNiri_fork 的 configs/starship.toml
+# 装到 ~/.config/starship.toml 后，fish 由 config.fish 里的 `starship init fish` 接管
+#
+# 布局：
+#   ╭╴  ubuntu at ~/proj  via main  took 1s  10808
+#   ╰─❯
+# 没有时间段（默认关掉了），只留目录、git、耗时、代理端口、语言版本。
+# =============================================================================
+palette = "nyx"
+
+format = """\
+[╭╴](fg:magenta)\
+$os\
+$username\
+$directory\
+$git_branch\
+$cmd_duration\
+${custom.proxy}\
+$python$nodejs$rust$c
+[╰─](fg:magenta)$character\
+"""
+
+add_newline = true
+
+[character]
+success_symbol = "[󰍟](fg:magenta)"
+error_symbol = "[󰍟](fg:red)"
+
+[os]
+format = "[$symbol]($style)"
+style = "bold magenta"
+disabled = false
+
+[os.symbols]
+Ubuntu = " "
+Debian = " "
+Linux = " "
+Arch = " "
+CachyOS = " "
+Fedora = " "
+Macos = " "
+Windows = " "
+
+[username]
+style_user = "bold magenta"
+style_root = "bold red"
+format = "[$user]($style) "
+disabled = false
+show_always = true
+
+[directory]
+format = "at [$path](bold fg:magenta)[$read_only]($read_only_style) "
+truncation_length = 2
+truncate_to_repo = true
+truncation_symbol = "…/"
+read_only = "  "
+style = "fg:magenta"
+read_only_style = "fg:magenta"
+before_repo_root_style = "fg:magenta"
+
+[git_branch]
+format = "via [$symbol$branch]($style) "
+style = "bold fg:cyan"
+symbol = " "
+
+[git_status]
+disabled = true
+
+[cmd_duration]
+disabled = false
+format = "took [$duration]($style) "
+style = "bold fg:red"
+min_time = 500
+
+[time]
+disabled = true
+
+[nodejs]
+format = "[$symbol$version]($style) "
+style = "bold fg:green"
+symbol = " "
+version_format = "${raw}"
+disabled = false
+
+[python]
+format = "[$symbol$version]($style) "
+style = "bold fg:yellow"
+symbol = " "
+version_format = "${raw}"
+disabled = false
+
+[rust]
+format = "[$symbol$version]($style) "
+style = "bold fg:magenta"
+symbol = " "
+version_format = "${raw}"
+disabled = false
+
+[c]
+format = "[$symbol$version]($style) "
+style = "bold fg:cyan"
+symbol = " "
+version_format = "${raw}"
+disabled = false
+
+# 代理端口：fishkit 的 proxy-on 设的是 http_proxy / all_proxy，取到哪个用哪个
+[custom.proxy]
+command = "echo \"$http_proxy $all_proxy $HTTP_PROXY $ALL_PROXY\" | tr ' ' '\\n' | grep -v '^$' | head -n1 | sed -nE 's|.*:([0-9]+)/?$|󰲝 \\1 |p'"
+when = "test -n \"$http_proxy$all_proxy$HTTP_PROXY$ALL_PROXY\""
+style = "bold fg:yellow"
+format = "[$output]($style)"
+
+# =============================================================================
+# 调色板：取自参考仓库的 noctalia 主题（紫调），想换颜色改这里就行
+# =============================================================================
+[palettes.nyx]
+blue      = "#feacef"
+red       = "#ffb4ab"
+green     = "#c4c0ff"
+yellow    = "#c6c3e9"
+cyan      = "#c6c3e9"
+magenta   = "#c4c0ff"
+white     = "#e5e1e9"
+black     = "#474551"
